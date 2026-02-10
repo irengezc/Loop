@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import {
   appendMistakes,
   loadDocumentText,
@@ -462,7 +463,7 @@ export function WritingCanvas() {
                 // Sort by start; non-overlapping so we can render in order
                 highlights.sort((a, b) => a.start - b.start);
 
-                const parts: JSX.Element[] = [];
+                const parts: ReactNode[] = [];
                 let cursor = 0;
                 highlights.forEach((h, idx) => {
                   if (h.start > cursor) {
