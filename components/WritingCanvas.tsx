@@ -547,8 +547,15 @@ export function WritingCanvas() {
             {analysis.status === "analyzing" && "Analyzing grammar in the background…"}
             {analysis.status === "idle" &&
               "Pause for a moment to see gentle grammar hints."}
-            {analysis.status === "error" &&
-              "Could not update feedback. It will retry after you keep writing."}
+            {analysis.status === "error" && (
+              <span>
+                Could not update feedback.{" "}
+                <span className="font-medium text-amber-600 dark:text-amber-400" title="Server error">
+                  ({analysis.message || "Unknown error"})
+                </span>
+                {" "}It will retry after you keep writing.
+              </span>
+            )}
             {analysis.status === "done" && !hasIssues &&
               "No major grammar issues detected. Keep going!"}
             {analysis.status === "done" && hasIssues &&

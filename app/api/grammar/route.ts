@@ -116,8 +116,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ issues: safeIssues });
   } catch (e) {
     console.error("Grammar API error:", e);
+    const message = e instanceof Error ? e.message : "Grammar analysis failed";
     return NextResponse.json(
-      { error: "Grammar analysis failed" },
+      { error: message },
       { status: 500 }
     );
   }
