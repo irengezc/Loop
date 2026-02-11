@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 const PROOFREAD_SYSTEM = `You are a proofreader. Return ONLY the corrected text, nothing else.
+- The text may be in any language (English, French, Spanish, etc.). Correct it in the SAME language.
 - Fix grammar, spelling, punctuation, and word choice. Preserve paragraphs and line breaks.
 - Keep the same meaning and tone. Do not add explanations, quotes, or preamble.
 - If the text is already correct, return it unchanged.`;

@@ -28,12 +28,10 @@ const DOCUMENT_KEY = "language-loop-document-v1";
 export function normalizeCategory(input: string): MistakeCategory {
   const lower = input.toLowerCase();
   if (lower.includes("article")) return "articles";
-  if (lower.includes("tense")) return "tense";
-  if (lower.includes("word form") || lower.includes("form"))
-    return "word_form";
-  if (lower.includes("preposition")) return "prepositions";
-  if (lower.includes("agreement") || lower.includes("subject-verb"))
-    return "agreement";
+  if (lower.includes("tense") || lower.includes("conjugaison") || lower.includes("temps")) return "tense";
+  if (lower.includes("word form") || lower.includes("form") || lower.includes("forme")) return "word_form";
+  if (lower.includes("preposition") || lower.includes("préposition")) return "prepositions";
+  if (lower.includes("agreement") || lower.includes("accord") || lower.includes("subject-verb")) return "agreement";
   return "other";
 }
 

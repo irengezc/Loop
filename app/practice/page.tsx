@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { EditorDiff } from "@/components/EditorDiff";
 import { ModeTabs } from "@/components/ModeTabs";
 import { loadMistakes, type MistakeCategory, type StoredMistake } from "@/lib/mistakes";
 
@@ -80,6 +81,7 @@ export default function PracticePage() {
   const [exerciseKind, setExerciseKind] = useState<ExerciseKind>("fill_blank");
   const [userAnswer, setUserAnswer] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [showEditing, setShowEditing] = useState(true);
 
   useEffect(() => {
     setMistakes(loadMistakes());
@@ -186,9 +188,20 @@ export default function PracticePage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
-          Your examples
-        </h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+            Your examples
+          </h2>
+          {selectedCategory && mistakesInCategory.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowEditing((v) => !v)}
+              className="rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[11px] font-medium text-zinc-600 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              {showEditing ? "Hide editing" : "Show editing"}
+            </button>
+          )}
+        </div>
         {!selectedCategory && (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             Select a mistake type above to see real sentences from your writing.
@@ -200,25 +213,27 @@ export default function PracticePage() {
           </p>
         )}
         {selectedCategory && mistakesInCategory.length > 0 && (
-          <div className="grid gap-2 md:grid-cols-2">
-            {mistakesInCategory.slice(0, 4).map((m) => (
+          <div className="flex flex-col gap-2">
+            {mistakesInCategory.slice(0, 8).map((m) => (
               <div
                 key={m.id}
-                className="rounded-lg border border-zinc-200 bg-white p-3 text-xs text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
               >
-                <p className="mb-1 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-                  Your sentence
-                </p>
-                <p className="mb-1 text-[11px] text-zinc-700 dark:text-zinc-200">
-                  “{m.sentence}”
-                </p>
-                <p className="mb-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-300">
-                  Suggested
-                </p>
-                <p className="mb-1 text-[11px] text-emerald-700 dark:text-emerald-200">
-                  “{m.correctedSentence}”
-                </p>
-                <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                {showEditing ? (
+                  <p className="leading-relaxed">
+                    <EditorDiff original={m.sentence} corrected={m.correctedSentence} />
+                  </p>
+                ) : (
+                  <>
+                    <p className="mb-1 text-[11px] text-zinc-700 dark:text-zinc-200">
+                      “{m.sentence}”
+                    </p>
+                    <p className="text-[11px] text-sky-600 dark:text-sky-400">
+                      → “{m.correctedSentence}”
+                    </p>
+                  </>
+                )}
+                <p className="mt-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
                   {m.explanation}
                 </p>
               </div>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const EXPLAIN_SYSTEM = `You explain proofreading changes in one short sentence. Given the original phrase and the corrected phrase, say why the change was made (e.g. grammar, word choice, clarity). Be concise. No preamble.`;
+const EXPLAIN_SYSTEM = `You explain proofreading changes in one short sentence. Given the original phrase and the corrected phrase, say why the change was made (e.g. grammar, word choice, clarity). Be concise. No preamble. Use the SAME language as the phrases (if they are in French, explain in French; if English, in English).`;
 
 export async function POST(req: Request) {
   try {

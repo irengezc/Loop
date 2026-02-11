@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { EditorDiff } from "@/components/EditorDiff";
 import {
   appendMistakes,
   loadDocumentText,
@@ -150,7 +151,7 @@ function splitIntoSentences(text: string): SentenceChunk[] {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     current += ch;
-    if (/[.!?]/.test(ch)) {
+    if (/[.!?…]/.test(ch)) {
       // include trailing spaces/newlines with this sentence
       let j = i + 1;
       while (j < text.length && /\s/.test(text[j])) {
@@ -186,8 +187,11 @@ export function WritingCanvas() {
   } | null>(null);
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
   const sentenceRefs = useRef<Record<string, HTMLSpanElement | null>>({});
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [commentPositions, setCommentPositions] = useState<Record<string, number>>({});
   const [rewrites, setRewrites] = useState<Record<string, string>>({});
   const [activeCommentSentence, setActiveCommentSentence] = useState<string | null>(null);
+  const [showEditing, setShowEditing] = useState(true);
 
   // Load persisted document on mount
   useEffect(() => {
@@ -217,6 +221,69 @@ export function WritingCanvas() {
     setSuggestionPos(null);
     setActiveCommentSentence(null);
   }, [content, analysis.status]);
+
+  // Measure sentence positions so comments can be top-aligned
+  useLayoutEffect(() => {
+    if (!showComments || !hasIssues || !scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+    const newPositions: Record<string, number> = {};
+    const seenSentences = new Set<string>();
+    for (const issue of issues) {
+      if (!issue.sentence || seenSentences.has(issue.sentence)) continue;
+      seenSentences.add(issue.sentence);
+      const key = issue.sentence.trim();
+      const matchingChunk = sentenceChunks.find((c) =>
+        c.text.includes(issue.sentence) || issue.sentence.includes(c.text.trim())
+      );
+      const chunkKey = matchingChunk?.text.trim();
+      const sentenceEl = chunkKey ? sentenceRefs.current[chunkKey] : null;
+      if (sentenceEl) {
+        const rect = sentenceEl.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        newPositions[issue.sentence] = rect.top - containerRect.top + container.scrollTop;
+      }
+    }
+    setCommentPositions(newPositions);
+  }, [showComments, hasIssues, issues, sentenceChunks, content]);
+
+  // Update comment positions on scroll/resize when comments are shown
+  useEffect(() => {
+    if (!showComments || !hasIssues) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const update = () => {
+      if (!container) return;
+      const newPositions: Record<string, number> = {};
+      const seenSentences = new Set<string>();
+      for (const issue of issues) {
+        if (!issue.sentence || seenSentences.has(issue.sentence)) continue;
+        seenSentences.add(issue.sentence);
+        const matchingChunk = sentenceChunks.find((c) =>
+          c.text.includes(issue.sentence) || issue.sentence.includes(c.text.trim())
+        );
+        const chunkKey = matchingChunk?.text.trim();
+        const sentenceEl = chunkKey ? sentenceRefs.current[chunkKey] : null;
+        if (sentenceEl) {
+          const rect = sentenceEl.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
+          newPositions[issue.sentence] = rect.top - containerRect.top + container.scrollTop;
+        }
+      }
+      setCommentPositions((prev) => {
+        const next = { ...prev, ...newPositions };
+        return Object.keys(next).length !== Object.keys(prev).length ||
+          Object.keys(next).some((k) => prev[k] !== next[k])
+          ? next
+          : prev;
+      });
+    };
+    container.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    return () => {
+      container.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [showComments, hasIssues, issues, sentenceChunks]);
 
   // When comments are visible, fetch more-natural rewrites per sentence (once).
   useEffect(() => {
@@ -353,6 +420,14 @@ export function WritingCanvas() {
         </header>
 
         <section className="flex flex-col gap-2">
+          {showComments && hasIssues ? (
+          <>
+          {/* Scrollable row: canvas + comments top-aligned with sentences */}
+          <div
+            ref={scrollContainerRef}
+            className="flex gap-6 min-h-[50vh] max-h-[70vh] overflow-auto"
+          >
+            <div className="min-w-0 flex-1">
           {/* Free-style canvas: textarea input + overlay for hints */}
           <div className="relative w-full text-lg leading-relaxed">
             <textarea
@@ -460,12 +535,31 @@ export function WritingCanvas() {
                   return <span key={chunk.key}>{chunk.text}</span>;
                 }
 
-                // Sort by start; non-overlapping so we can render in order
+                // Sort by start; remove overlaps to avoid duplicated text display.
+                // When overlapping, prefer the larger span (covers full repeated typo).
                 highlights.sort((a, b) => a.start - b.start);
+                const filteredHighlights: Highlight[] = [];
+                for (const h of highlights) {
+                  const overlaps = filteredHighlights.find(
+                    (f) => h.start < f.end && h.end > f.start
+                  );
+                  if (overlaps) {
+                    // If this span is larger, replace the overlapping one
+                    const hLen = h.end - h.start;
+                    const oLen = overlaps.end - overlaps.start;
+                    if (hLen > oLen) {
+                      filteredHighlights.splice(filteredHighlights.indexOf(overlaps), 1, h);
+                    }
+                    // else skip this smaller overlap
+                  } else {
+                    filteredHighlights.push(h);
+                  }
+                }
+                filteredHighlights.sort((a, b) => a.start - b.start);
 
                 const parts: ReactNode[] = [];
                 let cursor = 0;
-                highlights.forEach((h, idx) => {
+                filteredHighlights.forEach((h, idx) => {
                   if (h.start > cursor) {
                     parts.push(
                       <span key={`${chunk.key}-plain-${idx}`}>
@@ -542,6 +636,229 @@ export function WritingCanvas() {
               })}
             </div>
           </div>
+            </div>
+            {/* Comments column – each comment top-aligned with its sentence */}
+            <div className="relative w-80 flex-shrink-0">
+              <div className="sticky top-0 mb-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Comments
+                </p>
+              </div>
+              <div className="relative min-h-[200px]">
+                {(() => {
+                  const seenSentences = new Set<string>();
+                  return issues.map((issue, idx) => {
+                    if (!issue.sentence || seenSentences.has(issue.sentence)) return null;
+                    seenSentences.add(issue.sentence);
+                    const top = commentPositions[issue.sentence];
+                    const rewrite = rewrites[issue.sentence];
+                    const isActive = activeCommentSentence === issue.sentence;
+                    return (
+                      <button
+                        key={`${issue.sentence}-${idx}`}
+                        type="button"
+                        onClick={() => {
+                          setActiveCommentSentence((prev) =>
+                            prev === issue.sentence ? null : issue.sentence
+                          );
+                          const matchingChunk = sentenceChunks.find((c) =>
+                            c.text.includes(issue.sentence) || issue.sentence.includes(c.text.trim())
+                          );
+                          const chunkKey = matchingChunk?.text.trim();
+                          const target = chunkKey ? sentenceRefs.current[chunkKey] : null;
+                          if (target) {
+                            target.scrollIntoView({ behavior: "smooth", block: "center" });
+                          }
+                        }}
+                        className={`absolute left-0 right-0 rounded-lg border p-2 text-left text-xs transition-colors ${
+                          isActive
+                            ? "border-emerald-500 bg-emerald-50 dark:border-emerald-400 dark:bg-emerald-900/40"
+                            : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900/60 dark:hover:border-zinc-600"
+                        }`}
+                        style={{ top: typeof top === "number" ? `${Math.max(0, top)}px` : "0" }}
+                      >
+                        {rewrite ? (
+                          <p className="text-[11px] text-zinc-800 dark:text-zinc-100">"{rewrite}"</p>
+                        ) : (
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">More natural version loading…</p>
+                        )}
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          </div>
+          </>
+          ) : (
+          /* Canvas only (no comments layout) – reuse same scroll wrapper for consistent ref/measure */
+          <div ref={scrollContainerRef} className="flex gap-6">
+            <div className="min-w-0 flex-1">
+          <div className="relative w-full text-lg leading-relaxed">
+            <textarea
+              ref={textAreaRef}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Write freely here. Feedback will appear softly under your words after you pause…"
+              className="relative z-0 block w-full resize-none bg-transparent px-0 py-0 text-lg leading-relaxed text-transparent caret-zinc-800 outline-none"
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
+              aria-label="Writing canvas"
+            />
+            <div
+              className="pointer-events-none absolute inset-0 z-10 w-full whitespace-pre-wrap text-lg leading-relaxed text-zinc-800 dark:text-zinc-100"
+              aria-hidden="true"
+            >
+              {content.trim().length === 0 && (
+                <span className="text-zinc-400/70 dark:text-zinc-500/70">
+                  Write freely here. Feedback will appear softly under your words after you pause…
+                </span>
+              )}
+              {sentenceChunks.length === 0 && content}
+              {sentenceChunks.map((chunk) => {
+                const normalizedChunk = chunk.text.trim();
+                const matchingIssues: GrammarIssue[] = [];
+                if (hasIssues) {
+                  for (const issue of issues) {
+                    if (chunk.text.includes(issue.sentence)) matchingIssues.push(issue);
+                  }
+                }
+                if (!matchingIssues.length) return <span key={chunk.key}>{chunk.text}</span>;
+                type Highlight = {
+                  start: number;
+                  end: number;
+                  issue: GrammarIssue;
+                  originalFragment: string;
+                  correctedFragment: string;
+                };
+                const highlights: Highlight[] = [];
+                for (const issue of matchingIssues) {
+                  const sentenceText = issue.sentence;
+                  const baseSentenceIndex = chunk.text.indexOf(sentenceText);
+                  const fragmentPairs = diffFragmentsMulti(issue.sentence, issue.correctedSentence);
+                  for (const pair of fragmentPairs) {
+                    const fragment = pair.originalFragment.trim();
+                    if (!fragment) continue;
+                    let startInSentence = sentenceText.indexOf(fragment);
+                    if (baseSentenceIndex === -1 && fragment) {
+                      const altIndex = chunk.text.indexOf(fragment);
+                      if (altIndex !== -1) {
+                        highlights.push({
+                          start: altIndex,
+                          end: altIndex + fragment.length,
+                          issue,
+                          originalFragment: pair.originalFragment,
+                          correctedFragment: pair.correctedFragment,
+                        });
+                        continue;
+                      }
+                    }
+                    if (baseSentenceIndex === -1) continue;
+                    if (startInSentence === -1) {
+                      highlights.push({
+                        start: baseSentenceIndex,
+                        end: baseSentenceIndex + sentenceText.length,
+                        issue,
+                        originalFragment: pair.originalFragment,
+                        correctedFragment: pair.correctedFragment,
+                      });
+                      continue;
+                    }
+                    const fragStart = baseSentenceIndex + startInSentence;
+                    const fragEnd = fragStart + fragment.length;
+                    highlights.push({
+                      start: fragStart,
+                      end: fragEnd,
+                      issue,
+                      originalFragment: pair.originalFragment,
+                      correctedFragment: pair.correctedFragment,
+                    });
+                  }
+                }
+                if (!highlights.length) return <span key={chunk.key}>{chunk.text}</span>;
+                highlights.sort((a, b) => a.start - b.start);
+                const filteredHighlights: Highlight[] = [];
+                for (const h of highlights) {
+                  const overlaps = filteredHighlights.find((f) => h.start < f.end && h.end > f.start);
+                  if (overlaps) {
+                    const hLen = h.end - h.start;
+                    const oLen = overlaps.end - overlaps.start;
+                    if (hLen > oLen) {
+                      filteredHighlights.splice(filteredHighlights.indexOf(overlaps), 1, h);
+                    }
+                  } else {
+                    filteredHighlights.push(h);
+                  }
+                }
+                filteredHighlights.sort((a, b) => a.start - b.start);
+                const parts: ReactNode[] = [];
+                let cursor = 0;
+                filteredHighlights.forEach((h, idx) => {
+                  if (h.start > cursor) {
+                    parts.push(<span key={`${chunk.key}-plain-${idx}`}>{chunk.text.slice(cursor, h.start)}</span>);
+                  }
+                  const text = chunk.text.slice(h.start, h.end);
+                  const isFromActiveComment = activeCommentSentence && h.issue.sentence === activeCommentSentence;
+                  parts.push(
+                    <span
+                      key={`${chunk.key}-hl-${idx}`}
+                      className={
+                        "cursor-pointer rounded-sm underline underline-offset-[4px] [pointer-events:auto] " +
+                        (isFromActiveComment
+                          ? "bg-emerald-100/80 decoration-emerald-600 dark:bg-emerald-500/30 dark:decoration-emerald-300"
+                          : "bg-amber-100/80 decoration-amber-500/90 dark:bg-amber-500/25 dark:decoration-amber-300/90")
+                      }
+                      title={h.issue.explanation}
+                      role="button"
+                      tabIndex={0}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setActiveSuggestion({
+                          issue: h.issue,
+                          originalFragment: h.originalFragment,
+                          correctedFragment: h.correctedFragment,
+                        });
+                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                        setSuggestionPos({ top: rect.bottom + 8, left: rect.left + rect.width / 2 });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setActiveSuggestion({
+                            issue: h.issue,
+                            originalFragment: h.originalFragment,
+                            correctedFragment: h.correctedFragment,
+                          });
+                        }
+                      }}
+                    >
+                      {text}
+                    </span>
+                  );
+                  cursor = h.end;
+                });
+                if (cursor < chunk.text.length) {
+                  parts.push(<span key={`${chunk.key}-tail`}>{chunk.text.slice(cursor)}</span>);
+                }
+                return (
+                  <span
+                    key={chunk.key}
+                    ref={(el) => {
+                      if (!el || !normalizedChunk) return;
+                      sentenceRefs.current[normalizedChunk] = el;
+                    }}
+                  >
+                    {parts}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+            </div>
+          </div>
+          )}
 
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             {analysis.status === "analyzing" && "Analyzing grammar in the background…"}
@@ -567,8 +884,8 @@ export function WritingCanvas() {
       </div>
 
       {/* Right-side comments panel – overlays in the free right margin without shrinking canvas */}
-      {showComments && (
-        <aside className="fixed right-10 top-28 z-30 hidden h-[70vh] w-80 flex-col gap-3 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-800 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 lg:flex">
+      {showComments && !hasIssues && (
+        <aside className="hidden w-80 flex-shrink-0 lg:block">
           <div className="mb-1 flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
               Comments
@@ -660,28 +977,38 @@ export function WritingCanvas() {
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">
                       Suggestion
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveSuggestion(null);
-                        setSuggestionPos(null);
-                      }}
-                      className="text-[11px] text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-                    >
-                      Close
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowEditing((v) => !v)}
+                        className="text-[11px] text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                      >
+                        {showEditing ? "Hide" : "Show"} editing
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveSuggestion(null);
+                          setSuggestionPos(null);
+                        }}
+                        className="text-[11px] text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                      >
+                        Close
+                      </button>
+                    </div>
                   </div>
                   <p className="mb-1 text-[11px] font-semibold text-zinc-700 dark:text-zinc-100">
                     {label}
                   </p>
-                  <p className="mb-0.5 text-[11px] text-sky-800 dark:text-sky-200">
-                    with:{" "}
-                    <span className="font-medium">“{correctedFragment}”</span>
-                  </p>
-                  <p className="mb-1 text-[11px] text-zinc-700 dark:text-zinc-200">
-                    Replace:{" "}
-                    <span className="font-medium">“{originalFragment}”</span>
-                  </p>
+                  {showEditing ? (
+                    <p className="mb-2 text-[11px]">
+                      <EditorDiff original={originalFragment} corrected={correctedFragment} />
+                    </p>
+                  ) : (
+                    <p className="mb-2 text-[11px] text-zinc-700 dark:text-zinc-200">
+                      Replace “{originalFragment}” with “{correctedFragment}”
+                    </p>
+                  )}
                   <div className="my-2 h-px w-full bg-zinc-200 dark:bg-zinc-700" />
                   <p className="text-[11px] text-zinc-600 dark:text-zinc-300">
                     {issue.explanation}

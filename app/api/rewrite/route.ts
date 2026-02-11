@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 const REWRITE_SYSTEM = `You are a helpful language tutor.
 Given a learner's sentence or short paragraph, rewrite it into a version that feels natural and fluent for a native speaker.
 
+Language: The text may be in any language (English, French, Spanish, etc.). Rewrite in the SAME language as the input. Make it natural for a native speaker of that language.
+
 Rules:
 - Keep the same meaning and tone.
 - You MAY adjust word choice and sentence structure for naturalness.

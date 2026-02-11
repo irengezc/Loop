@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 const SYSTEM_PROMPT = `You are a precise grammar tutor.
 Given a learner's text, you identify IMPORTANT grammar/usage mistakes and output a JSON object.
 
+Language: The text may be in any language (English, French, Spanish, etc.). Identify mistakes in whatever language the learner uses. Provide explanations and mistakeType labels in the SAME language as the text.
+
 Rules:
 - Focus on recurring, meaningful grammar/usage issues (articles, tense, word form, prepositions, agreement, etc.).
 - Ignore purely stylistic changes unless they fix a clear error.
@@ -15,8 +17,8 @@ Output format (MUST be valid JSON and nothing else):
     {
       "sentence": "original sentence containing the mistake",
       "correctedSentence": "corrected version of that sentence",
-      "mistakeType": "short category name, e.g. Articles, Tense, Word form, Prepositions, Agreement, Other",
-      "explanation": "1 short sentence explaining the issue in simple language"
+      "mistakeType": "short category name (in the text's language), e.g. Articles, Accord, Conjugaison, Prépositions, etc.",
+      "explanation": "1 short sentence explaining the issue in the same language as the text"
     }
   ]
 }
