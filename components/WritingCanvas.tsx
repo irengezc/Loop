@@ -352,17 +352,28 @@ export function WritingCanvas() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: textToCheck }),
         });
-        const body = (await res.json().catch(() => ({}))) as {
-          issues?: GrammarIssue[];
-          error?: string;
-        };
+        const rawText = await res.text();
+        let body: { issues?: GrammarIssue[]; error?: string } = {};
+        try {
+          body = rawText ? (JSON.parse(rawText) as typeof body) : {};
+        } catch {
+          // Non-JSON response (e.g. HTML error page)
+          body = {
+            error:
+              res.status >= 500
+                ? "Server error. Please try again shortly."
+                : `Request failed (${res.status}). Please try again.`,
+          };
+        }
         if (!res.ok) {
-          setAnalysis({
-            status: "error",
-            message:
-              (body?.error as string) ??
-              `Grammar analysis failed (${res.status})`,
-          });
+          const errMsg =
+            (body?.error as string)?.trim() ||
+            (res.status === 503
+              ? "Service unavailable. Check configuration."
+              : res.status >= 500
+                ? "Server error. Please try again."
+                : `Request failed (${res.status}).`);
+          setAnalysis({ status: "error", message: errMsg });
           return;
         }
         const newIssues =
@@ -387,11 +398,12 @@ export function WritingCanvas() {
         setAnalysis({ status: "done" });
         setLastAnalyzedText(content);
       } catch (e) {
-        setAnalysis({
-          status: "error",
-          message:
-            e instanceof Error ? e.message : "Grammar analysis failed unexpectedly.",
-        });
+        const msg = e instanceof Error ? e.message : "";
+        const userMessage =
+          msg.includes("Failed to fetch") || msg.toLowerCase().includes("network")
+            ? "Could not reach the server. Check your connection."
+            : msg || "Grammar analysis failed. Please try again.";
+        setAnalysis({ status: "error", message: userMessage });
       }
     }, 1500); // 1.5s pause
 
@@ -866,11 +878,10 @@ export function WritingCanvas() {
               "Pause for a moment to see gentle grammar hints."}
             {analysis.status === "error" && (
               <span>
-                Could not update feedback.{" "}
-                <span className="font-medium text-amber-600 dark:text-amber-400" title="Server error">
-                  ({analysis.message || "Unknown error"})
+                <span className="font-medium text-amber-600 dark:text-amber-400">
+                  {analysis.message || "Something went wrong."}
                 </span>
-                {" "}It will retry after you keep writing.
+                {" "}It will retry when you keep writing.
               </span>
             )}
             {analysis.status === "done" && !hasIssues &&

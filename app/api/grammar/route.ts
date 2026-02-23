@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "OPENAI_API_KEY is not set" },
+        { error: "Grammar check is not configured. Add OPENAI_API_KEY to your environment (e.g. in Vercel or .env.local)." },
         { status: 503 }
       );
     }
@@ -62,9 +62,13 @@ export async function POST(req: Request) {
     });
 
     if (!res.ok) {
-      const body = await res.text();
+      const rawBody = await res.text();
+      let userMessage = `OpenAI API error (${res.status})`;
+      if (res.status === 401) userMessage = "Invalid API key. Check OPENAI_API_KEY.";
+      if (res.status === 429) userMessage = "Rate limit exceeded. Please try again in a moment.";
+      if (res.status >= 500) userMessage = "AI service temporarily unavailable. Please try again shortly.";
       return NextResponse.json(
-        { error: `OpenAI API error: ${res.status}`, details: body },
+        { error: userMessage, details: rawBody },
         { status: 502 }
       );
     }
@@ -79,10 +83,7 @@ export async function POST(req: Request) {
     } catch {
       // If the model didn't return pure JSON, fall back gracefully.
       return NextResponse.json(
-        {
-          error: "Could not parse grammar analysis response.",
-          raw,
-        },
+        { error: "Could not parse grammar analysis. Please try again." },
         { status: 502 }
       );
     }
@@ -93,7 +94,7 @@ export async function POST(req: Request) {
       !Array.isArray((parsed as any).issues)
     ) {
       return NextResponse.json(
-        { error: "Grammar analysis response missing issues.", raw: parsed },
+        { error: "Unexpected response from grammar analysis. Please try again." },
         { status: 502 }
       );
     }
@@ -118,9 +119,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ issues: safeIssues });
   } catch (e) {
     console.error("Grammar API error:", e);
-    const message = e instanceof Error ? e.message : "Grammar analysis failed";
+    const msg = e instanceof Error ? e.message : "";
+    const userMessage =
+      msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("network")
+        ? "Network error. Check your connection and try again."
+        : "Grammar analysis failed. Please try again.";
     return NextResponse.json(
-      { error: message },
+      { error: userMessage },
       { status: 500 }
     );
   }
