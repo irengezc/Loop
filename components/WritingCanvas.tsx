@@ -222,6 +222,8 @@ export function WritingCanvas() {
     setActiveCommentSentence(null);
   }, [content, analysis.status]);
 
+  const hasIssues = issues.length > 0;
+
   // Measure sentence positions so comments can be top-aligned
   useLayoutEffect(() => {
     if (!showComments || !hasIssues || !scrollContainerRef.current) return;
@@ -411,8 +413,6 @@ export function WritingCanvas() {
   }, [content, lastAnalyzedText]);
 
   const sentenceChunks = useMemo(() => splitIntoSentences(content), [content]);
-
-  const hasIssues = issues.length > 0;
 
   return (
     <div className="relative flex gap-6">
