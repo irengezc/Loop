@@ -83,12 +83,16 @@ function findTimestamp(
   return wordTimestamps[Math.min(wordIndex, wordTimestamps.length - 1)] ?? null;
 }
 
+const WORD_PAD = 0.15; // seconds of padding before/after word boundary
+
 async function sliceAudio(blob: Blob, start: number, end: number): Promise<AudioBuffer | null> {
   try {
     const ctx = new AudioContext();
     const full = await ctx.decodeAudioData(await blob.arrayBuffer());
     ctx.close();
-    const duration = Math.max(end - start, 0.05);
+    const paddedStart = Math.max(0, start - WORD_PAD);
+    const paddedEnd = Math.min(full.duration, end + WORD_PAD);
+    const duration = Math.max(paddedEnd - paddedStart, 0.1);
     const offCtx = new OfflineAudioContext(
       full.numberOfChannels,
       Math.ceil(duration * full.sampleRate),
@@ -97,7 +101,7 @@ async function sliceAudio(blob: Blob, start: number, end: number): Promise<Audio
     const src = offCtx.createBufferSource();
     src.buffer = full;
     src.connect(offCtx.destination);
-    src.start(0, start, duration);
+    src.start(0, paddedStart, duration);
     return offCtx.startRendering();
   } catch {
     return null;
@@ -195,7 +199,9 @@ function HighlightedTranscript({
   wordTimestamps: WordTimestamp[];
   attemptId: string;
 }) {
+  // active is either an API issue or just a plain wrong word string
   const [activeIssue, setActiveIssue] = useState<PronunciationIssue | null>(null);
+  const [activeWrongWord, setActiveWrongWord] = useState<string | null>(null);
   const [youState, setYouState] = useState<PlayState>("idle");
   const [nativeState, setNativeState] = useState<PlayState>("idle");
   const youSrcRef = useRef<AudioBufferSourceNode | null>(null);
@@ -220,9 +226,16 @@ function HighlightedTranscript({
     setNativeState("idle");
   }
 
-  function handleClick(issue: PronunciationIssue) {
-    if (activeIssue !== issue) { stopYou(); stopNative(); }
+  function handleIssueClick(issue: PronunciationIssue) {
+    stopYou(); stopNative();
+    setActiveWrongWord(null);
     setActiveIssue((prev) => (prev === issue ? null : issue));
+  }
+
+  function handleWrongWordClick(word: string) {
+    stopYou(); stopNative();
+    setActiveIssue(null);
+    setActiveWrongWord((prev) => (prev === word ? null : word));
   }
 
   async function toggleYouWord(ts: WordTimestamp) {
@@ -273,50 +286,67 @@ function HighlightedTranscript({
     ? findTimestamp(activeIssue, targetText, wordTimestamps)
     : null;
 
+  const hintWord = activeIssue?.word ?? activeWrongWord;
+
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm leading-relaxed text-zinc-600">
         {words.map((w, i) => {
-          if (!w.wrong) return <span key={i}>{w.word} </span>;
+          if (!w.wrong) return <span key={i}>{w.word}{" "}</span>;
           if (w.issue) return (
-            <button
-              key={i}
-              onClick={() => handleClick(w.issue!)}
-              className={[
-                "rounded px-0.5 transition-colors focus:outline-none",
-                severityRing[w.issue.severity],
-                activeIssue === w.issue ? "bg-red-50" : "hover:bg-zinc-100",
-              ].join(" ")}
-            >
-              {w.word}{" "}
-            </button>
+            <span key={i}>
+              <button
+                onClick={() => handleIssueClick(w.issue!)}
+                className={[
+                  "select-none cursor-pointer rounded px-0.5 transition-colors focus:outline-none",
+                  severityRing[w.issue.severity],
+                  activeIssue === w.issue ? "bg-red-50" : "",
+                ].join(" ")}
+              >
+                {w.word}
+              </button>
+              {" "}
+            </span>
           );
-          // wrong but no API issue — plain red underline, not tappable
           return (
-            <span key={i} className="underline decoration-red-400 decoration-2 text-red-500">
-              {w.word}{" "}
+            <span key={i}>
+              <button
+                onClick={() => handleWrongWordClick(w.word)}
+                className={[
+                  "select-none cursor-pointer rounded px-0.5 transition-colors focus:outline-none",
+                  "underline decoration-red-400 decoration-2 text-red-500",
+                  activeWrongWord === w.word ? "bg-red-50" : "",
+                ].join(" ")}
+              >
+                {w.word}
+              </button>
+              {" "}
             </span>
           );
         })}
       </p>
 
-      {activeIssue && (
+      {(activeIssue || activeWrongWord) && hintWord && (
         <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm shadow-sm">
           <div className="flex items-center justify-between gap-2">
             <p className="font-medium text-zinc-800">
-              &ldquo;{activeIssue.word}&rdquo;
-              <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-normal text-zinc-500 capitalize">
-                {activeIssue.type}
-              </span>
+              &ldquo;{hintWord}&rdquo;
+              {activeIssue && (
+                <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-normal text-zinc-500 capitalize">
+                  {activeIssue.type}
+                </span>
+              )}
             </p>
             <div className="flex gap-1.5">
               {activeTimestamp && (
                 <WordButton label="You" state={youState} onClick={() => toggleYouWord(activeTimestamp)} />
               )}
-              <WordButton label="Native" state={nativeState} onClick={() => toggleNativeWord(activeIssue.word)} />
+              <WordButton label="Native" state={nativeState} onClick={() => toggleNativeWord(hintWord)} />
             </div>
           </div>
-          <p className="mt-1 text-zinc-600">{activeIssue.hint}</p>
+          <p className="mt-1 text-zinc-600">
+            {activeIssue ? activeIssue.hint : "This word didn't match the original."}
+          </p>
         </div>
       )}
     </div>

@@ -7,11 +7,37 @@ import { saveAttempt } from "@/lib/history";
 import { saveAudio } from "@/lib/audioStore";
 import type { AnalysisResult } from "@/lib/types";
 
-const DEFAULT_SENTENCE = "The quick brown fox jumps over the lazy dog.";
+const SENTENCES = [
+  "The quick brown fox jumps over the lazy dog.",
+  "She sells seashells by the seashore.",
+  "How much wood would a woodchuck chuck if a woodchuck could chuck wood?",
+  "Peter Piper picked a peck of pickled peppers.",
+  "I saw Susie sitting in a shoeshine shop.",
+  "The thirty-three thieves thought that they thrilled the throne throughout Thursday.",
+  "Whether the weather is warm, whether the weather is hot, we have to put up with the weather whether we like it or not.",
+  "Betty Botter bought some butter, but the butter was bitter.",
+  "A proper copper coffee pot sits on the kitchen shelf.",
+  "Red lorry, yellow lorry, red lorry, yellow lorry.",
+  "Around the rugged rocks the ragged rascal ran.",
+  "Fresh French fried fish flesh.",
+  "Which witch switched the Swiss wristwatches?",
+  "Six slippery snails slid slowly seaward.",
+  "The black bloke's back brake block broke.",
+  "Can you can a can as a canner can can a can?",
+  "I scream, you scream, we all scream for ice cream.",
+  "She thought she saw a fish on the dish that she wished she had finished.",
+  "A big black bug bit a big black bear.",
+  "How can a clam cram in a clean cream can?",
+];
+
+function pickRandom(current: string): string {
+  const pool = SENTENCES.filter((s) => s !== current);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 export default function Home() {
-  const [targetText, setTargetText] = useState(DEFAULT_SENTENCE);
-  const [draft, setDraft] = useState(DEFAULT_SENTENCE);
+  const [targetText, setTargetText] = useState(SENTENCES[0]);
+  const [draft, setDraft] = useState(SENTENCES[0]);
   const [isEditing, setIsEditing] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
 
@@ -30,6 +56,11 @@ export default function Home() {
     });
     await saveAudio(id, audioBlob);
     setHistoryKey((k) => k + 1);
+  }
+
+  function shuffle() {
+    const next = pickRandom(targetText);
+    setTargetText(next);
   }
 
   function startEditing() {
@@ -79,27 +110,44 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-base font-medium leading-relaxed text-zinc-700">{targetText}</p>
-            <button
-              onClick={startEditing}
-              aria-label="Edit sentence"
-              className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 active:bg-zinc-200"
-            >
-              <PencilIcon />
-            </button>
+          <div className="flex items-start justify-between gap-2">
+            <p className="flex-1 text-base font-medium leading-relaxed text-zinc-700">{targetText}</p>
+            <div className="flex shrink-0 gap-1">
+              <button
+                onClick={shuffle}
+                aria-label="Random sentence"
+                className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 active:bg-zinc-200"
+              >
+                <ShuffleIcon />
+              </button>
+              <button
+                onClick={startEditing}
+                aria-label="Edit sentence"
+                className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 active:bg-zinc-200"
+              >
+                <PencilIcon />
+              </button>
+            </div>
           </div>
         )}
 
         {!isEditing && <Recorder targetText={targetText} onResult={handleResult} />}
       </section>
 
-      {/* History (includes feedback for each attempt) */}
+      {/* History */}
       <section className="flex flex-col gap-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">History</h2>
         <HistoryList key={historyKey} />
       </section>
     </main>
+  );
+}
+
+function ShuffleIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h5l2 3M4 20h5l7-8-7-8H4M15 4h5v4h-5M15 20h5v-4h-5M15 8l2 4-2 4" />
+    </svg>
   );
 }
 
