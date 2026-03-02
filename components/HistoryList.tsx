@@ -52,8 +52,9 @@ function PlayButton({ label, getBlob }: { label: string; getBlob: () => Promise<
     <button
       onClick={toggle}
       className={[
-        "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-        state === "playing" ? "bg-indigo-600 text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200",
+        "flex shrink-0 items-center justify-center rounded-lg p-1.5 transition-colors",
+        label ? "gap-1.5 px-3 text-xs font-medium" : "h-7 w-7",
+        state === "playing" ? "bg-indigo-600 text-white" : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200",
         state === "loading" ? "cursor-wait opacity-60" : "",
       ].join(" ")}
     >
@@ -89,21 +90,22 @@ function AttemptCard({ attempt }: { attempt: PronunciationAttempt }) {
         )}
       </div>
 
-      <p className="text-sm font-medium leading-snug text-zinc-800">{attempt.targetText}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-medium leading-snug text-zinc-800">{attempt.targetText}</p>
+        <PlayButton label="" getBlob={getNativeAudio} />
+      </div>
 
-      <p className="text-sm leading-snug text-zinc-500">
-        <span className="text-zinc-400">You said: </span>
-        {attempt.transcript || <em className="text-zinc-300">—</em>}
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm leading-snug text-zinc-500">
+          <span className="text-zinc-400">You said: </span>
+          {attempt.transcript || <em className="text-zinc-300">—</em>}
+        </p>
+        <PlayButton label="" getBlob={getUserAudio} />
+      </div>
 
       <p className="text-xs text-zinc-400">
         {issueCount === 0 ? "No issues" : `${issueCount} issue${issueCount > 1 ? "s" : ""}`}
       </p>
-
-      <div className="flex gap-2">
-        <PlayButton label="You" getBlob={getUserAudio} />
-        <PlayButton label="Native" getBlob={getNativeAudio} />
-      </div>
     </li>
   );
 }
