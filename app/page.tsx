@@ -5,6 +5,7 @@ import { Recorder } from "@/components/Recorder";
 import { HighlightedSentence } from "@/components/HighlightedSentence";
 import { HistoryList } from "@/components/HistoryList";
 import { saveAttempt } from "@/lib/history";
+import { saveAudio } from "@/lib/audioStore";
 import type { AnalysisResult } from "@/lib/types";
 
 const DEFAULT_SENTENCE = "The quick brown fox jumps over the lazy dog.";
@@ -16,15 +17,17 @@ export default function Home() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [historyKey, setHistoryKey] = useState(0);
 
-  function handleResult(analysis: AnalysisResult) {
+  async function handleResult(analysis: AnalysisResult, audioBlob: Blob) {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     saveAttempt({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id,
       createdAt: new Date().toISOString(),
       targetText: analysis.targetText,
       transcript: analysis.transcript,
       feedback: analysis.issues,
       topTag: analysis.tags[0] ?? "",
     });
+    await saveAudio(id, audioBlob);
     setResult(analysis);
     setHistoryKey((k) => k + 1);
   }

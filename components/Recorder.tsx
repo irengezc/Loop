@@ -7,7 +7,7 @@ type Status = "idle" | "recording" | "processing";
 
 interface Props {
   targetText: string;
-  onResult: (result: AnalysisResult) => void;
+  onResult: (result: AnalysisResult, audioBlob: Blob) => void;
 }
 
 export function Recorder({ targetText, onResult }: Props) {
@@ -58,7 +58,7 @@ export function Recorder({ targetText, onResult }: Props) {
       const res = await fetch("/api/analyze", { method: "POST", body });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const result = (await res.json()) as AnalysisResult;
-      onResult(result);
+      onResult(result, audio);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
