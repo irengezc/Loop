@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Recorder } from "@/components/Recorder";
-import { HighlightedSentence } from "@/components/HighlightedSentence";
 import { HistoryList } from "@/components/HistoryList";
 import { saveAttempt } from "@/lib/history";
 import { saveAudio } from "@/lib/audioStore";
@@ -14,7 +13,6 @@ export default function Home() {
   const [targetText, setTargetText] = useState(DEFAULT_SENTENCE);
   const [draft, setDraft] = useState(DEFAULT_SENTENCE);
   const [isEditing, setIsEditing] = useState(false);
-  const [result, setResult] = useState<AnalysisResult | null>(null);
   const [historyKey, setHistoryKey] = useState(0);
 
   async function handleResult(analysis: AnalysisResult, audioBlob: Blob) {
@@ -26,9 +24,11 @@ export default function Home() {
       transcript: analysis.transcript,
       feedback: analysis.issues,
       topTag: analysis.tags[0] ?? "",
+      fluencyScore: analysis.fluencyScore,
+      tags: analysis.tags,
+      wordTimestamps: analysis.wordTimestamps ?? [],
     });
     await saveAudio(id, audioBlob);
-    setResult(analysis);
     setHistoryKey((k) => k + 1);
   }
 
@@ -39,10 +39,7 @@ export default function Home() {
 
   function confirmEdit() {
     const trimmed = draft.trim();
-    if (trimmed) {
-      setTargetText(trimmed);
-      setResult(null);
-    }
+    if (trimmed) setTargetText(trimmed);
     setIsEditing(false);
   }
 
@@ -97,41 +94,7 @@ export default function Home() {
         {!isEditing && <Recorder targetText={targetText} onResult={handleResult} />}
       </section>
 
-      {/* Feedback card */}
-      {result && (
-        <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-              Feedback
-            </h2>
-            <span className="text-sm font-semibold text-indigo-600">
-              {result.fluencyScore}/100
-            </span>
-          </div>
-
-          <HighlightedSentence targetText={result.targetText} issues={result.issues} />
-
-          <p className="text-sm text-zinc-500">
-            <span className="text-zinc-400">You said: </span>
-            {result.transcript}
-          </p>
-
-          {result.tags.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {result.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-500"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* History */}
+      {/* History (includes feedback for each attempt) */}
       <section className="flex flex-col gap-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">History</h2>
         <HistoryList key={historyKey} />

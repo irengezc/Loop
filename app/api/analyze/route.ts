@@ -51,11 +51,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing or empty audio file" }, { status: 400 });
   }
 
-  // Step 1: Transcribe with Whisper
+  // Step 1: Transcribe with Whisper (verbose_json for word-level timestamps)
   const whisperForm = new FormData();
   whisperForm.append("file", audioFile, audioFile.name || "recording.webm");
   whisperForm.append("model", "whisper-1");
-  whisperForm.append("response_format", "text");
+  whisperForm.append("response_format", "verbose_json");
+  whisperForm.append("timestamp_granularities[]", "word");
 
   const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
@@ -68,7 +69,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Transcription failed", details: err }, { status: 502 });
   }
 
-  const transcript = (await whisperRes.text()).trim();
+  const whisperData = (await whisperRes.json()) as {
+    text: string;
+    words?: Array<{ word: string; start: number; end: number }>;
+  };
+  const transcript = whisperData.text?.trim() ?? "";
+  const wordTimestamps = (whisperData.words ?? []).map((w) => ({
+    word: w.word.trim(),
+    start: w.start,
+    end: w.end,
+  }));
 
   // Step 2: Compare with GPT
   const gptRes = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -109,8 +119,8 @@ export async function POST(req: NextRequest) {
   let result: AnalysisResult;
   try {
     result = JSON.parse(raw) as AnalysisResult;
-    // Enforce max 5 issues
     result.issues = (result.issues ?? []).slice(0, 5);
+    result.wordTimestamps = wordTimestamps;
   } catch {
     return NextResponse.json({ error: "Model returned invalid JSON" }, { status: 502 });
   }

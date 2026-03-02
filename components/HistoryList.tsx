@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadAttempts } from "@/lib/history";
 import { loadAudio } from "@/lib/audioStore";
+import { HighlightedSentence } from "@/components/HighlightedSentence";
 import type { PronunciationAttempt } from "@/lib/types";
 
 function formatDate(iso: string): string {
@@ -52,21 +53,17 @@ function PlayButton({ label, getBlob }: { label: string; getBlob: () => Promise<
     <button
       onClick={toggle}
       className={[
-        "flex shrink-0 items-center justify-center rounded-lg p-1.5 transition-colors",
-        label ? "gap-1.5 px-3 text-xs font-medium" : "h-7 w-7",
+        "flex shrink-0 items-center justify-center rounded-lg p-1.5 transition-colors h-7 w-7",
         state === "playing" ? "bg-indigo-600 text-white" : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200",
         state === "loading" ? "cursor-wait opacity-60" : "",
       ].join(" ")}
     >
       {state === "playing" ? <StopIcon /> : state === "loading" ? <SpinnerIcon /> : <PlayIcon />}
-      {label}
     </button>
   );
 }
 
 function AttemptCard({ attempt }: { attempt: PronunciationAttempt }) {
-  const issueCount = attempt.feedback.length;
-
   const getUserAudio = () => loadAudio(attempt.id);
 
   const getNativeAudio = async () => {
@@ -83,17 +80,24 @@ function AttemptCard({ attempt }: { attempt: PronunciationAttempt }) {
     <li className="flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-zinc-400">{formatDate(attempt.createdAt)}</span>
-        {attempt.topTag && (
-          <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-600">
-            {attempt.topTag}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {attempt.fluencyScore != null && (
+            <span className="text-xs font-semibold text-indigo-600">{attempt.fluencyScore}/100</span>
+          )}
+          {attempt.topTag && (
+            <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-600">
+              {attempt.topTag}
+            </span>
+          )}
+        </div>
       </div>
 
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-medium leading-snug text-zinc-800">{attempt.targetText}</p>
-        <PlayButton label="" getBlob={getNativeAudio} />
-      </div>
+      <HighlightedSentence
+        targetText={attempt.targetText}
+        issues={attempt.feedback}
+        wordTimestamps={attempt.wordTimestamps}
+        attemptId={attempt.id}
+      />
 
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm leading-snug text-zinc-500">
@@ -103,9 +107,10 @@ function AttemptCard({ attempt }: { attempt: PronunciationAttempt }) {
         <PlayButton label="" getBlob={getUserAudio} />
       </div>
 
-      <p className="text-xs text-zinc-400">
-        {issueCount === 0 ? "No issues" : `${issueCount} issue${issueCount > 1 ? "s" : ""}`}
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm leading-snug text-zinc-500">Native speaker</p>
+        <PlayButton label="" getBlob={getNativeAudio} />
+      </div>
     </li>
   );
 }
@@ -135,26 +140,11 @@ export function HistoryList() {
 }
 
 function PlayIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M8 5v14l11-7z" />
-    </svg>
-  );
+  return <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>;
 }
-
 function StopIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-      <rect x="6" y="6" width="12" height="12" rx="1" />
-    </svg>
-  );
+  return <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1" /></svg>;
 }
-
 function SpinnerIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-    </svg>
-  );
+  return <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>;
 }
