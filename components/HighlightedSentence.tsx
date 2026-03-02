@@ -42,6 +42,21 @@ function normalize(s: string) {
   return s.toLowerCase().replace(/[^a-z]/g, "");
 }
 
+function findTimestamp(
+  issue: PronunciationIssue,
+  targetText: string,
+  wordTimestamps: WordTimestamp[]
+): WordTimestamp | null {
+  if (!wordTimestamps.length) return null;
+  // Exact match first
+  const exact = wordTimestamps.find((t) => normalize(t.word) === normalize(issue.word));
+  if (exact) return exact;
+  // Position fallback: estimate word index by counting whitespace-separated tokens before startIndex
+  const textBefore = targetText.slice(0, issue.startIndex).trim();
+  const wordIndex = textBefore === "" ? 0 : textBefore.split(/\s+/).length;
+  return wordTimestamps[Math.min(wordIndex, wordTimestamps.length - 1)] ?? null;
+}
+
 async function sliceAudio(blob: Blob, start: number, end: number): Promise<AudioBuffer | null> {
   try {
     const ctx = new AudioContext();
@@ -97,11 +112,9 @@ export function HighlightedSentence({ targetText, issues, wordTimestamps, attemp
     setActiveIssue((prev) => (prev === issue ? null : issue));
   }
 
-  async function toggleYouWord(word: string) {
+  async function toggleYouWord(ts: WordTimestamp) {
     if (youState === "playing") { stopYou(); return; }
-    if (!wordTimestamps?.length || !attemptId) return;
-    const ts = wordTimestamps.find((t) => normalize(t.word) === normalize(word));
-    if (!ts) return;
+    if (!attemptId) return;
     setYouState("loading");
     try {
       const blob = await loadAudio(attemptId);
@@ -142,6 +155,9 @@ export function HighlightedSentence({ targetText, issues, wordTimestamps, attemp
   }
 
   const hasWordAudio = !!wordTimestamps?.length && !!attemptId;
+  const activeTimestamp = activeIssue && wordTimestamps
+    ? findTimestamp(activeIssue, targetText, wordTimestamps)
+    : null;
 
   return (
     <div className="flex flex-col gap-3">
@@ -175,11 +191,11 @@ export function HighlightedSentence({ targetText, issues, wordTimestamps, attemp
               </span>
             </p>
             <div className="flex gap-1.5">
-              {hasWordAudio && (
+              {hasWordAudio && activeTimestamp && (
                 <WordButton
                   label="You"
                   state={youState}
-                  onClick={() => toggleYouWord(activeIssue.word)}
+                  onClick={() => toggleYouWord(activeTimestamp)}
                 />
               )}
               <WordButton
